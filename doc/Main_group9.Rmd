@@ -1,0 +1,519 @@
+---
+title: "Project 3: Facial Emotion Recognition"
+author: "Group 9"
+date: "3/30/2020"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Abstract
+
+|   | baseline model | improved model |  
+| ------ | ------ | ------ | 
+| test accuracy | 40.4% | 53.6% | 
+| training time | 1816.61s | 533.71s |
+| testing time | 13.199s | 0.54s |
+
+The goal of this project is to predict facial emotion. After trying multiple machine learning models such as Gradient Boosting Machine (GBM), Linear discriminant analysis (LDA), Support Vector Machine (SVM), Random Forest (RF), XGBoost (XGB) and Convolutional Neural Network (CNN), we found that using XGB model has better effect. The comparison bewteen baseline model (GBM) and improved model (XGB) is shown as below.
+
+
+### Step 1: set up work directory 
+
+Before reproducing the project, please set your work directory.
+
+```{r}
+setwd("/Users/rachel/Documents/GitHub/Spring2020-Project3-ads-spring2020-project3-group9/doc")
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+if(!require("EBImage")){
+if (!requireNamespace("BiocManager", quietly = TRUE)){
+    install.packages("BiocManager")
+BiocManager::install(version = "3.10")
+BiocManager::install("EBImage")
+}
+}
+
+if(!require("R.matlab")){
+  install.packages("R.matlab")
+}
+if(!require("readxl")){
+  install.packages("readxl")
+}
+
+if(!require("dplyr")){
+  install.packages("dplyr")
+}
+if(!require("readxl")){
+  install.packages("readxl")
+}
+
+if(!require("ggplot2")){
+  install.packages("ggplot2")
+}
+
+if(!require("caret")){
+  install.packages("caret")
+}
+
+if(!require("gbm")){
+  install.packages("gbm")
+}
+
+if(!require("MASS")){
+  install.packages("MASS")
+}
+
+if(!require("glmnet")){
+  install.packages("MASS")
+}
+
+if(!require("e1071")){
+  install.packages("e1071")
+}
+
+if(!require("randomForest")){
+  install.packages("randomForest")
+}
+
+if(!require("xgboost")){
+  install.packages("xgboost")
+}
+
+library(R.matlab)
+library(readxl)
+library(dplyr)
+library(EBImage)
+library(ggplot2)
+library(caret)
+library(MASS)
+library(glmnet)
+library(e1071)
+library(randomForest)
+library(xgboost)
+devtools::install_github("koalaverse/vip")
+```
+
+```{r}
+set.seed(5)
+seed <- .Random.seed
+```
+
+```{r} 
+train_dir <- "../data/train_set/"
+train_image_dir <- paste(train_dir, "images/", sep="")
+train_pt_dir <- paste(train_dir,  "points/", sep="")
+train_label_path <- paste(train_dir, "label.csv", sep="")
+
+run.feature.train=TRUE # process features for training set
+run.test=TRUE          # run evaluation on an independent test set
+run.feature.test=TRUE # process features for test set
+```
+
+### Step 2: Import data and train-test data split
+
+We split 80% of data into training and 20% into testing. For baseline model - GBM, and other models such as SVM, XGBoost, RF, and LDA, we only used the fiducial points extracted from the images.
+
+```{r}
+### set train-test split
+info <- read.csv(train_label_path)
+n <- nrow(info)
+n_train <- round(n*(4/5), 0)
+train_idx <- sample(info$Index, n_train, replace = F)
+test_idx <- setdiff(info$Index,train_idx)
+```
+
+```{r}
+### read fiducial points
+n_files <- length(list.files(train_image_dir))
+readMat.matrix <- function(index){
+  return(round(readMat(paste0(train_pt_dir, sprintf("%04d", index), ".mat"))[[1]],0))
+}
+
+### load fiducial points
+fiducial_pt_list <- lapply(1:n_files, readMat.matrix)
+save(fiducial_pt_list, file="../output/fiducial_pt_list.RData")
+#load("../output/fiducial_pt_list.RData")
+```
+
+
+
+### Step 3: Feature Extraction
+
+Based on the fiducial points, we calculated the pairwise distances between fiducial points and utilized each distance as a feature. We didn't construct or remove any feature in this step as the fiducial points are extracted features from the original images. That said, the information we can obtain from the fiducial points is less than that from the images. If we continue removing some points or information, there is less data for models to train. But we conducted the principal component analysis(PCA) to reduce the dimensions in further steps.
+
+
+
+```{r}
+### calculate the pairwise distances between fiducial points
+source("../lib/feature.R")
+tm_feature_train <- NA
+if(run.feature.train){
+  tm_feature_train <- system.time(dat_train <- feature(fiducial_pt_list, train_idx))
+}
+
+tm_feature_test <- NA
+if(run.feature.test){
+  tm_feature_test <- system.time(dat_test <- feature(fiducial_pt_list, test_idx))
+}
+
+save(dat_train, file="../output/feature_train.RData")
+save(dat_test, file="../output/feature_test.RData")
+
+#load(file="../output/feature_train.RData")
+#load(file="../output/feature_test.RData")
+```
+
+
+
+### Step 4: Baseline Model - Gradient Boosting Machine (GBM)
+
+
+
+#### Step 4.1: Build model and fit on train data
+
+To keep this main file simple, we removed the cross validation and parameters tuning step to reduce the reproduction time. After conduction cross validation, the hyperparameters we used for GBM model are listed as followed.
+
++ n.trees = 300   -- number of iterations/trees
++ shrinkage = 0.15   -- learning rate
++ interaction.depth = 2  -- number of splits on a tree
++ n.minobsinnode = 10  -- minimum number of observations in trees' terminal nodes 
+
+```{r}
+### load models built
+source("../lib/train_gbm.R")    ### train model
+
+### fit train data
+tm_train=NA
+tm_train_gbm <- system.time(fit_train_gbm <- train_gbm(feature_df = dat_train))
+save(fit_train_gbm, file="../output/gbm_train.RData")
+```
+
+Please see the details of model as below.
+
+```{r}
+fit_train_gbm
+```
+
+
+
+#### Step 4.2: Visualize variables importances of train model
+
+After running our baseline model, we wanted to understand the variables that influence the emotion prediction largely. So, we plotted the most influential variables. Here, we utilized the default method - relative influence to compute the variables importance, which shows the average improvement obtained by each variable across all trees that use the variable.
+
+
+```{r}
+vip::vip(fit_train_gbm)
+```
+
+
+
+#### Step 4.3: Predict test data and evaluate
+
+Then, we predicted the test data and evaluated the performance of model.
+
+```{r}
+### load models built
+source("../lib/test_gbm.R")     ### test model
+
+### predict test data
+tm_test_gbm=NA
+if(run.test){
+  load(file="../output/gbm_train.RData")
+  tm_test_gbm <- system.time(pred <- test_gbm(model_best = fit_train_gbm, feature_test = dat_test))
+}
+```
+
+Evaluation on GBM model
+```{r}
+pred_model = predict(fit_train_gbm, dat_test, n.trees = 300, type = "response")
+pred_gbm = apply(pred_model, 1, which.max)
+accu_gbm <- mean(dat_test$emotion_idx == pred_gbm)
+cat("The accuracy of model: gradient boosting machine", "is", accu_gbm*100, "%.\n")
+pred_gbm = as.factor(pred_gbm)
+confusionMatrix(pred_gbm, dat_test$emotion_idx)
+cat("Time for training model GBM = ", tm_train_gbm[1], "s \n")
+cat("Time for testing model GBM = ",tm_test_gbm[1], "s \n")
+```
+
+
+
+#### Step 4.4: Summary
+
+Overall, the predictive accuracy of GBM is not bad. Also, it doesn't need data pre-processing and handles multiple categorical value well. However, it is computational expensive to build many trees and tune multiple parameters based on cross validation. The result of model is less interpretable and easily understood as we built models on fiducial points distances. To improve the accuracy and eliminate other disadvantages of GBM, we also tried other models such as LDA, SVM, RF, and XGBoost.
+
+
+
+
+### Step 5: Improved Models - Linear Discriminant Analysis (LDA), Support Vector Machine (SVM), Random Forest, Extreme Gradient Boosting (XGBoost), Convolutional Neural Network (CNN)
+
+
+#### Step 5.1: Linear Discriminant Analysis (LDA) with Principal Component Analysis (PCA)
+
+##### PCA
+Extract first principal component from feature data
+```{r}
+#load(file="../output/feature_train.RData")
+#load(file="../output/feature_test.RData")
+
+## Convert dat_train to numeric data.frame
+dat_train.new <- matrix(0, ncol = ncol(dat_train) - 1, nrow = nrow(dat_train))
+for (i in 1:(ncol(dat_train) - 1)) {
+  dat_train.new[,i] <- as.numeric(dat_train[[i]])
+}
+dat_train.new <- as.data.frame(dat_train.new)
+
+## PCA for training features
+source("../lib/train_pca.R")
+tm_train_pca <- NA
+tm_train_pca <- system.time(fit_train_pca <- train_pca(dat_train.new))
+save(fit_train_pca, file="../output/pca_train.RData")
+```
+
+Visualization of proportion of variance to choose number of principle components
+```{r}
+screeplot(fit_train_pca)
+
+## The proportion of variance for first 500 PCs 
+sum((fit_train_pca$sdev[1:500])^2) / sum((fit_train_pca$sdev)^2)
+
+## Combine pc_features with the emption index
+dat_train_pca <- data.frame(fit_train_pca$x[,1:500], emotion_idx = dat_train[,6007])
+```
+
+Apply PC model to test data
+```{r}
+## Extract PC from test data
+source("../lib/test_pca.R")
+dat_test.new <- dat_test
+colnames(dat_test.new) <- c(colnames(dat_train.new), "emotion_idx")
+tm_test_pcs <- NA
+tm_test_pca <- system.time(dat_test.new <- test_pca(fit_train_pca, dat_test.new))
+
+## Combine pc_features with the emption index
+dat_test_pca <- data.frame(dat_test.new[,1:500], emotion_idx = dat_test[,6007])
+
+
+save(dat_train_pca, file="../output/feature_train_pca.RData")
+save(dat_test_pca, file="../output/feature_test_pca.RData")
+
+#load("../output/feature_train_pca.RData")
+#load("../output/feature_test_pca.RData")
+```
+
+Evaluation on PCA model
+```{r}
+cat("Time for training model PCA = ", tm_train_pca[1], "s \n")
+cat("Time for testing model PCA = ",tm_test_pca[1], "s \n")
+```
+
+##### LDA
+Train the model with the entire training set using the selected model (model parameter) via cross-validation.
+```{r message = FALSE, warning = FALSE}
+source("../lib/train_lda.R")
+tm_train_lda = NA
+tm_train_lda <- system.time(fit_train_lda <- train_lda(dat_train_pca, par_best))
+save(fit_train_lda, file="../output/lda_train.RData")
+```
+
+Predicted the test data using LDA model
+```{r}
+source("../lib/test_lda.R")
+tm_test_lda = NA
+tm_test_lda <- system.time(pred_lda <- test_lda(fit_train_lda, dat_test_pca))
+```
+
+Evaluation on LDA model
+```{r}
+accu_lda <- mean(dat_test_pca$emotion_idx == pred_lda)
+cat("The accuracy of model: LDA", "is", accu_lda*100, "%.\n")
+confusionMatrix(pred_lda, dat_test_pca$emotion_idx)
+cat("Time for training model LDA = ", tm_train_lda[1], "s \n")
+cat("Time for testing model LDA = ",tm_test_lda[1], "s \n")
+```
+
+Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
+
+#### Step 5.5: Logistic Regression Model (LR) with Principal Component Analysis (PCA)
+
+Train the model with the entire training set using the selected model (model parameter) via cross-validation.
+```{r}
+source("../lib/train_lr.R")
+tm_train_lr=NA
+tm_train_lr <- system.time(fit_train_lr <- train_lr(dat_train_pca))
+plot(fit_train_lr)
+opt_lambda <- fit_train_lr$lambda.1se
+fit_train_lr <- fit_train_lr$glmnet.fit
+save(fit_train_lr, file="../output/lr_train.RData")
+```
+
+Predicted the test data using LR model
+```{r}
+source("../lib/test_lr.R")
+tm_test_lr = NA
+tm_test_lr <- system.time(pred_lr <- test_lr(fit_train_lr, dat_test_pca))
+```
+
+Evaluation on LR model
+```{r}
+accu_lr <- mean(dat_test_pca$emotion_idx == pred_lr)
+cat("The accuracy of model: LR", "is", accu_lr*100, "%.\n")
+a <- matrix(as.vector(dat_test_pca$emotion_idx), 500, 93)
+confusionMatrix(as.factor(pred_lr), as.factor(a))
+cat("Time for training model LR = ", tm_train_lr[1], "s \n")
+cat("Time for testing model LR = ", tm_test_lr[1], "s \n")
+```
+
+#### Step 5.3: Support Vector Machine (SVM)
+
+Then, we tried Support Vector Machine Model. An SVM training algorithm builds a model that assigns new examples to one category or the other, making it a non-probabilistic binary linear classifier. 
+
+The global argument we need to consider is stated below: 
+
+ + kernel: the kernel used in training and predicting
+ + degree: parameter needed for kernel of type polynomial (default: 3)
+ + gamma: parameter needed for all kernels except linear (default: 1/(data dimension))
+
+We tried linear, polynomial and radial basis kernels seperately , expolred different parameters(degree for polynomial kernel and gamma for radial basis kernel) for this model and found the linear kernel for SVM model fit the data best. 
+
+```{r}
+source("../lib/train_svm.R")
+tm_train_svm <- NA
+tm_train_svm <- system.time(fit_train_svm <- train_svm(dat_train))
+save(fit_train_svm, file="../output/svm_train.RData")
+```
+
+Predicted the test data using SVM model
+```{r}
+source("../lib/test_svm.R")
+tm_test_svm <- NA
+tm_test_svm <- system.time(pred_svm <- test_svm(fit_train_svm, dat_test))
+```
+
+Evaluation on SVM model
+```{r}
+accu_svm <- mean(dat_test$emotion_idx == pred_svm)
+cat("The accuracy of model: SVM", "is", accu_svm*100, "%.\n")
+confusionMatrix(pred_svm, dat_test$emotion_idx)
+cat("Time for training model SVM = ", tm_train_svm[1], "s \n")
+cat("Time for testing model SVM = ",tm_test_svm[1], "s \n")
+```
+
+
+#### Step 5.4: Random Forest
+
+Random Forest is another approach that we consider as a candidate of our advanced model. It is a non-parametric model that would give us more flexibility but along with the risk of overfitting. Random forest is a popular algorithm for classification in a long time, and it dominant a lot of other approaches in application.  
+
+However, tuning a random forest model is not easy, the global argument we need to consider is stated below: 
+
+ + ntrees: the number of trees in the forest
+ + mtry: the number of features to consider when looking for the best split
+ + max_depth: the maximum depth of each tree
+
+To tune these three parameters using grid search and cross validation is super time costing, since we are dealing with a multi-dimensional data. So we decide only tune the mtry parameter which we consider as the most important parameter that affect the model performance.  
+Thus, after tuning the mtry parameter, we get the optimal parameter as mtry = 77. We then plug in this optimal parameter into our training process.  
+
+```{r message=FALSE, warning = FALSE}
+## Fit the train model and record the running time
+source("../lib/train_rf.R")
+tm_train_rf <- NA
+tm_train_rf <- system.time(fit_train_rf <- train_rf(dat_train))
+save(fit_train_rf, file="../output/rf_train.RData")
+```
+
+The training process is already encapsulated in the *train_rf.R* file and the training time is recorded as tm_train_rf.  
+```{r}
+## Use the fitted model to make prediction
+source("../lib/test_rf.R")
+tm_test_rf <- NA
+tm_test_rf <- system.time(pred_rf <- test_rf(fit_train_rf, dat_test = dat_test))
+accu_rf <- mean(dat_test$emotion_idx == pred_rf)
+```
+
+Evaluation on RF model
+```{r}
+accu_svm <- mean(dat_test$emotion_idx == pred_rf)
+cat("The accuracy of model: RF", "is", accu_rf*100, "%.\n")
+confusionMatrix(pred_rf, dat_test$emotion_idx)
+cat("Time for training model RF = ", tm_train_rf[1], "s \n")
+cat("Time for testing model RF = ",tm_test_rf[1], "s \n")
+```
+
+
+#### Step 5.5: Extreme Gradient Boosting (XGBoost)
+Because the constructing XGBoost models take quite a long time, we used random search to tune the parameters. With the result of cross validation on the training set, the hyperparameters we used for XGBoost model are listed as followed.
+
+ + booster = "gblinear"  -- the booster to use, can be gbtree or gblinear, gblinear has better performance and efficiency
+ + objective = "multi:softmax" -- set xgboost to do multiclass classification using the softmax objective, the prediction outputs the class with maximum probability
+ + eval_metric = "mlogloss" -- evaluation metrics for validation data
+ + lambda = 1.46  -- L2 regularization term on weights
+ + lambda_bias = 0.234  -- L2 regularization term on bias
+ + alpha = 0.0198 -- L1 regularization term on weights
+ 
+```{r}
+### load models built
+source("../lib/train_xgb.R")    ### train model
+
+### use the optimal parameters
+xgb_param_list <- list(
+  xgb_para = list(alpha = 0.0198, lambda = 1.46, lambda_bias = 0.234),
+  nround = 100
+)
+
+### fit train data
+
+tm_train_xgb = NA
+tm_train_xgb <- system.time(fit_train_xgb <- train_xgb(feature_df = dat_train, par = xgb_param_list))
+save(fit_train_xgb, file="../output/xgb_train.RData")
+```
+
+Please see the details of model as below.
+```{r}
+fit_train_xgb
+```
+
+After running our baseline model, we wanted to understand the variables that influence the emotion prediction largely. So, we plotted the most influential variables.
+```{r}
+xgb_importance_mat <- xgb.importance(
+  feature_names = colnames(dat_train[,-which(names(dat_train) == 'emotion_idx')]),
+  model = fit_train_xgb)
+xgb.plot.importance (importance_matrix = xgb_importance_mat[1:20]) 
+```
+
+Then, we predicted the test data and evaluated the performance of model.
+```{r}
+### load models built
+source("../lib/test_xgb.R")     ### test model
+
+### predict test data
+tm_test_xgb=NA
+if(run.test){
+  load(file="../output/xgb_train.RData")
+  tm_test_xgb <- system.time(pred_xgb <- test_xgb(xgb_model = fit_train_xgb, dat_test = dat_test))
+}
+```
+
+Evaluation on XGB model
+```{r}
+confusionMatrix(factor(pred_xgb$max_prob),factor(dat_test$emotion_idx),mode = "everything")
+cat("Time for training model XGB = ", tm_train_xgb[1], "s \n")
+cat("Time for testing model XGB = ",tm_test_xgb[1], "s \n")
+```
+Overall, the predictive accuracy of XGBoost is beyond 0.5. Also, the accuracy of test set is close to the accuracy of the cross validation on training set. And with the linear booster, the model performs better and more efficient than tree booster. However, it is computational expensive to tune multiple parameters based on cross validation. The result of model is less interpretable and easily understood as we built models on fiducial points distances. 
+
+
+### Step 6: Comparison and Summary
+
+From above data, we can choose XGB model as our advanced model and there are some advantages of this model: 
+
++ High efficiency in both training and testing process; 
++ Higher prediction accuracy compared to baseline model; 
++ Robustness. 
+
+
