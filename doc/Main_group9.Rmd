@@ -450,7 +450,7 @@ cat("Time for testing model RF = ",tm_test_rf[1], "s \n")
 Because the constructing XGBoost models take quite a long time, we used random search to tune the parameters. With the result of cross validation on the training set, the hyperparameters we used for XGBoost model are listed as followed.
 
  + booster = "gblinear"  -- the booster to use, can be gbtree or gblinear, gblinear has better performance and efficiency
- + objective = "multi:softmax" -- set xgboost to do multiclass classification using the softmax objective, the prediction outputs the class with maximum probability
+ + objective = "multi:softmax" -- set xgboost to do multiclass classification using the softmax objective, the prediction outputs the probability of each class
  + eval_metric = "mlogloss" -- evaluation metrics for validation data
  + lambda = 1.46  -- L2 regularization term on weights
  + lambda_bias = 0.234  -- L2 regularization term on bias
