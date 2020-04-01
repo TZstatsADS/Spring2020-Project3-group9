@@ -11,10 +11,13 @@ Below is an example. If no contribution statement is provided, we will insert a 
 ---
 Sample project README statement.
 
-Project xxx
+Project 3
 
-Team members: Avi Bond, Comma Deed, En Funn, Gem Hon
+Team members: Huize Huang, Mengchen Wang, Rui Wang, Jiadong Wu, Qin Zhang
 
-Summary: In this project, we developed a new method and improved the classification accuracy for images of cats and dogs to 99.9%
+Summary: In this project, we developed improved the classification accuracy for facial emotion recognition accuracy for images to 56.2%
 
-[Contribution Statement] AB, CD, EF and GH designed the study. AB and CD developed baseline classification model for evaluation. EF and GH explored feature engineering for improving the baseline model. AB, EF and GH discussed and designed the model evaluation protocol. CD carried out the computation for model evaluation. All team members contributed to the GitHub repository and prepared the presentation. All team members approve our work presented in our GitHub repository including this contribution statement.
+[Contribution Statement] (In the following context, "all team members" refers to the team meambers listed above.) All team members listed above discussed and decided the models to build in this project.
+    For the model training, Qin Zhang designed and trained the baseline model (GBM) in R. Rui Wang conducted PCA on the data and designed and trained the SVM model in R. Mengchen Wang designed and trained LDA and Logistic Regression model in R. Jiadong Wu designed and trained Random Forest model in R and Neural Network model in Pytnon. Huize Huang designed and trained XGboost model in R and designed the ensemble model. The ensemble model is trained by Rui.    
+    For the other work, Rui integrated the codes of main file, with Huize providing some edits. Qin and Mengchen worked on the presentation slides. Huize contributed to the readme files and contribution statement on github.
+    Ryan Walters was assigned to our group at first. He joined the first online meting and offered to designed and trained the Convolutional Neural Network model. But he never share his work or code with the rest of the team and hasn't replied to the rest of the team since Mar.29th.
