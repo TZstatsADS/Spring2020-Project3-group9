@@ -264,6 +264,7 @@ Overall, the predictive accuracy of GBM is not bad. Also, it doesn't need data p
 
 ### Step 5: Improved Models - Linear Discriminant Analysis (LDA), Support Vector Machine (SVM), Random Forest, Extreme Gradient Boosting (XGBoost), ensemble model of SVM and XGB, Neural Network (NN)
 
+We use NN as our advanced model, so please cheak main_NN.py or main_NN.md on Github. 
 
 #### Step 5.1: Linear Discriminant Analysis (LDA) with Principal Component Analysis (PCA)
 
