@@ -16,18 +16,22 @@ knitr::opts_chunk$set(echo = TRUE)
 
 |   | baseline model | improved model |  
 | ------ | ------ | ------ | 
-| test accuracy | 40.4% | 53.6% | 
-| training time | 1816.61s | 533.71s |
-| testing time | 13.199s | 0.54s |
+| test accuracy | 46.6% | 54.6% | 
+| training time | 1816.61s | 39s |
+| testing time | 13.199s | 0.264s |
 
-The goal of this project is to predict facial emotion. After trying multiple machine learning models such as Gradient Boosting Machine (GBM), Linear discriminant analysis (LDA), Support Vector Machine (SVM), Random Forest (RF), XGBoost (XGB) and Convolutional Neural Network (CNN), we found that using XGB model has better effect. The comparison bewteen baseline model (GBM) and improved model (XGB) is shown as below.
+(There might be some slight difference of time and accuracy on different computers, so the data above just give you a sense of our model. )
+
+The goal of this project is to predict facial emotion. After trying multiple machine learning models such as Gradient Boosting Machine (GBM), Linear discriminant analysis (LDA), Support Vector Machine (SVM), Random Forest (RF), XGBoost (XGB), ensemble model of SVM and XGB, and Neural Network (NN), we found that using ensemble model has better effect. The comparison bewteen baseline model (GBM) and improved model (NN) is shown as below.
 
 
 ### Step 1: set up work directory 
 
 Before reproducing the project, please set your work directory.
 
-```{r}
+```{r wkdir, eval=FALSE}
+set.seed(5)
+seed <- .Random.seed
 setwd("/Users/rachel/Documents/GitHub/Spring2020-Project3-ads-spring2020-project3-group9/doc")
 ```
 
@@ -86,6 +90,10 @@ if(!require("xgboost")){
   install.packages("xgboost")
 }
 
+if(!require("devtools")){
+  install.packages("devtools")
+}
+
 library(R.matlab)
 library(readxl)
 library(dplyr)
@@ -94,18 +102,15 @@ library(ggplot2)
 library(caret)
 library(MASS)
 library(glmnet)
+library(gbm)
 library(e1071)
 library(randomForest)
 library(xgboost)
+library(devtools)
 devtools::install_github("koalaverse/vip")
 ```
 
-```{r}
-set.seed(5)
-seed <- .Random.seed
-```
-
-```{r} 
+```{r exp_setup} 
 train_dir <- "../data/train_set/"
 train_image_dir <- paste(train_dir, "images/", sep="")
 train_pt_dir <- paste(train_dir,  "points/", sep="")
@@ -118,7 +123,7 @@ run.feature.test=TRUE # process features for test set
 
 ### Step 2: Import data and train-test data split
 
-We split 80% of data into training and 20% into testing. For baseline model - GBM, and other models such as SVM, XGBoost, RF, and LDA, we only used the fiducial points extracted from the images.
+We split 80% of data into training and 20% into testing. For baseline model - GBM, and other models such as SVM, XGBoost, RF, and NN, we only used the fiducial points extracted from the images.
 
 ```{r}
 ### set train-test split
@@ -129,7 +134,7 @@ train_idx <- sample(info$Index, n_train, replace = F)
 test_idx <- setdiff(info$Index,train_idx)
 ```
 
-```{r}
+```{r read fiducial point}
 ### read fiducial points
 n_files <- length(list.files(train_image_dir))
 readMat.matrix <- function(index){
@@ -150,7 +155,7 @@ Based on the fiducial points, we calculated the pairwise distances between fiduc
 
 
 
-```{r}
+```{r feature}
 ### calculate the pairwise distances between fiducial points
 source("../lib/feature.R")
 tm_feature_train <- NA
@@ -185,7 +190,7 @@ To keep this main file simple, we removed the cross validation and parameters tu
 + interaction.depth = 2  -- number of splits on a tree
 + n.minobsinnode = 10  -- minimum number of observations in trees' terminal nodes 
 
-```{r}
+```{r train_gbm}
 ### load models built
 source("../lib/train_gbm.R")    ### train model
 
@@ -216,9 +221,16 @@ vip::vip(fit_train_gbm)
 
 #### Step 4.3: Predict test data and evaluate
 
-Then, we predicted the test data and evaluated the performance of model.
+Calculate the training error of GBM model
+```{r train_err_gbm}
+source("../lib/test_gbm.R")
+pred_train_gbm <- test_gbm(fit_train_gbm, dat_train)
+accu_train_gbm <- mean(pred_train_gbm == dat_train$emotion_idx)
+cat("The trainig accuracy of model: GBM", "is", accu_train_gbm*100, "%.\n")
+```
 
-```{r}
+Then, we predicted the test data and evaluated the performance of model.
+```{r test_gbm}
 ### load models built
 source("../lib/test_gbm.R")     ### test model
 
@@ -232,8 +244,7 @@ if(run.test){
 
 Evaluation on GBM model
 ```{r}
-pred_model = predict(fit_train_gbm, dat_test, n.trees = 300, type = "response")
-pred_gbm = apply(pred_model, 1, which.max)
+pred_gbm = test_gbm(fit_train_gbm, dat_test)
 accu_gbm <- mean(dat_test$emotion_idx == pred_gbm)
 cat("The accuracy of model: gradient boosting machine", "is", accu_gbm*100, "%.\n")
 pred_gbm = as.factor(pred_gbm)
@@ -251,14 +262,14 @@ Overall, the predictive accuracy of GBM is not bad. Also, it doesn't need data p
 
 
 
-### Step 5: Improved Models - Linear Discriminant Analysis (LDA), Support Vector Machine (SVM), Random Forest, Extreme Gradient Boosting (XGBoost), Convolutional Neural Network (CNN)
+### Step 5: Improved Models - Linear Discriminant Analysis (LDA), Support Vector Machine (SVM), Random Forest, Extreme Gradient Boosting (XGBoost), ensemble model of SVM and XGB, Neural Network (NN)
 
 
 #### Step 5.1: Linear Discriminant Analysis (LDA) with Principal Component Analysis (PCA)
 
 ##### PCA
 Extract first principal component from feature data
-```{r}
+```{r train_pca}
 #load(file="../output/feature_train.RData")
 #load(file="../output/feature_test.RData")
 
@@ -288,7 +299,7 @@ dat_train_pca <- data.frame(fit_train_pca$x[,1:500], emotion_idx = dat_train[,60
 ```
 
 Apply PC model to test data
-```{r}
+```{r test_pca}
 ## Extract PC from test data
 source("../lib/test_pca.R")
 dat_test.new <- dat_test
@@ -315,18 +326,28 @@ cat("Time for testing model PCA = ",tm_test_pca[1], "s \n")
 
 ##### LDA
 Train the model with the entire training set using the selected model (model parameter) via cross-validation.
-```{r message = FALSE, warning = FALSE}
+```{r train_lda, message = FALSE, warning = FALSE}
 source("../lib/train_lda.R")
 tm_train_lda = NA
 tm_train_lda <- system.time(fit_train_lda <- train_lda(dat_train_pca, par_best))
 save(fit_train_lda, file="../output/lda_train.RData")
 ```
 
-Predicted the test data using LDA model
-```{r}
+Calculate the training error of LDA model
+```{r train_err_lda}
 source("../lib/test_lda.R")
+pred_train_lda <- test_lda(fit_train_lda, dat_train_pca)
+accu_train_lda <- mean(pred_train_lda == dat_train_pca$emotion_idx)
+cat("The trainig accuracy of model: LDA", "is", accu_train_lda*100, "%.\n")
+```
+
+Predicted the test data using LDA model
+```{r test_lda}
 tm_test_lda = NA
-tm_test_lda <- system.time(pred_lda <- test_lda(fit_train_lda, dat_test_pca))
+if(run.test){
+  load(file="../output/lda_train.RData")
+  tm_test_lda <- system.time(pred_lda <- test_lda(fit_train_lda, dat_test_pca))
+}
 ```
 
 Evaluation on LDA model
@@ -340,35 +361,53 @@ cat("Time for testing model LDA = ",tm_test_lda[1], "s \n")
 
 Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
 
-#### Step 5.5: Logistic Regression Model (LR) with Principal Component Analysis (PCA)
+#### Step 5.2: Logistic Regression Model (LR) with Principal Component Analysis (PCA)
 
 Train the model with the entire training set using the selected model (model parameter) via cross-validation.
-```{r}
+```{r train_lr,error=FALSE,warning=FALSE}
 source("../lib/train_lr.R")
 tm_train_lr=NA
-tm_train_lr <- system.time(fit_train_lr <- train_lr(dat_train_pca))
-plot(fit_train_lr)
-opt_lambda <- fit_train_lr$lambda.1se
-fit_train_lr <- fit_train_lr$glmnet.fit
+tm_train_lr <- system.time(cv_fit_train_lr <- train_lr(feature_df = dat_train_pca))
+plot(cv_fit_train_lr)
+```
+
+```{r opt_lr}
+opt_lambda <- cv_fit_train_lr$lambda.1se
+
+fit_train_lr <- glmnet(as.matrix(dat_train_pca[, 1:500]), 
+                     factor(dat_train_pca$emotion_idx),
+                     family = "multinomial",
+              alpha = 0,
+              lambda = opt_lambda)
 save(fit_train_lr, file="../output/lr_train.RData")
 ```
 
-Predicted the test data using LR model
-```{r}
+Calculate the training error of LR model
+```{r train_err_lr}
 source("../lib/test_lr.R")
+pred_train_lr <- test_lr(fit_train_lr,opt_lambda, dat_train_pca)
+accu_train_lr <- mean(pred_train_lr == dat_train$emotion_idx)
+cat("The trainig accuracy of model: LR", "is", accu_train_lr*100, "%.\n")
+```
+
+Predicted the test data using LR model
+```{r test_lr}
 tm_test_lr = NA
-tm_test_lr <- system.time(pred_lr <- test_lr(fit_train_lr, dat_test_pca))
+if(run.test){
+  load(file="../output/lr_train.RData")
+  tm_test_lr <- system.time(pred_lr <- test_lr(fit_train_lr,opt_lambda, dat_test_pca))
+}
 ```
 
 Evaluation on LR model
 ```{r}
 accu_lr <- mean(dat_test_pca$emotion_idx == pred_lr)
 cat("The accuracy of model: LR", "is", accu_lr*100, "%.\n")
-a <- matrix(as.vector(dat_test_pca$emotion_idx), 500, 93)
-confusionMatrix(as.factor(pred_lr), as.factor(a))
 cat("Time for training model LR = ", tm_train_lr[1], "s \n")
 cat("Time for testing model LR = ", tm_test_lr[1], "s \n")
 ```
+
+
 
 #### Step 5.3: Support Vector Machine (SVM)
 
@@ -376,24 +415,33 @@ Then, we tried Support Vector Machine Model. An SVM training algorithm builds a 
 
 The global argument we need to consider is stated below: 
 
- + kernel: the kernel used in training and predicting
- + degree: parameter needed for kernel of type polynomial (default: 3)
- + gamma: parameter needed for all kernels except linear (default: 1/(data dimension))
+ + kernel = "linear" -- the kernel used in training and predicting
+ + cost = 0.02 -- cost of constraints violation(default: 1)
 
 We tried linear, polynomial and radial basis kernels seperately , expolred different parameters(degree for polynomial kernel and gamma for radial basis kernel) for this model and found the linear kernel for SVM model fit the data best. 
 
-```{r}
+```{r train_svm}
 source("../lib/train_svm.R")
 tm_train_svm <- NA
-tm_train_svm <- system.time(fit_train_svm <- train_svm(dat_train))
+tm_train_svm <- system.time(fit_train_svm <- train_svm(dat_train, probability = TRUE))
 save(fit_train_svm, file="../output/svm_train.RData")
 ```
 
-Predicted the test data using SVM model
-```{r}
+Calculate the training error of SVM model
+```{r train_err_svm}
 source("../lib/test_svm.R")
+pred_train_svm <- test_svm(fit_train_svm, dat_train)
+accu_train_svm <- mean(pred_train_svm == dat_train$emotion_idx)
+cat("The trainig accuracy of model: SVM", "is", accu_train_svm*100, "%.\n")
+```
+
+Predicted the test data using SVM model
+```{r test_svm}
 tm_test_svm <- NA
-tm_test_svm <- system.time(pred_svm <- test_svm(fit_train_svm, dat_test))
+if(run.test){
+  load(file="../output/svm_train.RData")
+  tm_test_svm <- system.time(pred_svm <- test_svm(fit_train_svm, dat_test, probability = TRUE))
+}
 ```
 
 Evaluation on SVM model
@@ -412,14 +460,14 @@ Random Forest is another approach that we consider as a candidate of our advance
 
 However, tuning a random forest model is not easy, the global argument we need to consider is stated below: 
 
- + ntrees: the number of trees in the forest
- + mtry: the number of features to consider when looking for the best split
- + max_depth: the maximum depth of each tree
+ + ntrees = 500 -- the number of trees in the forest
+ + mtry = 77 -- the number of features to consider when looking for the best split
+ + max_depth -- the maximum depth of each tree(by default)
 
 To tune these three parameters using grid search and cross validation is super time costing, since we are dealing with a multi-dimensional data. So we decide only tune the mtry parameter which we consider as the most important parameter that affect the model performance.  
 Thus, after tuning the mtry parameter, we get the optimal parameter as mtry = 77. We then plug in this optimal parameter into our training process.  
 
-```{r message=FALSE, warning = FALSE}
+```{r train_rf, message=FALSE, warning = FALSE}
 ## Fit the train model and record the running time
 source("../lib/train_rf.R")
 tm_train_rf <- NA
@@ -427,18 +475,28 @@ tm_train_rf <- system.time(fit_train_rf <- train_rf(dat_train))
 save(fit_train_rf, file="../output/rf_train.RData")
 ```
 
+Calculate the training error of RF model
+```{r train_err_rf}
+### load models built
+source("../lib/test_rf.R")     ### test model
+
+pred_train_rf <- test_rf(fit_train_rf, dat_train)
+accu_train_rf <- mean(pred_train_rf == dat_train$emotion_idx)
+cat("The trainig accuracy of model: RF", "is", accu_train_rf*100, "%.\n")
+```
+
 The training process is already encapsulated in the *train_rf.R* file and the training time is recorded as tm_train_rf.  
-```{r}
-## Use the fitted model to make prediction
-source("../lib/test_rf.R")
+```{r test_rf}
 tm_test_rf <- NA
-tm_test_rf <- system.time(pred_rf <- test_rf(fit_train_rf, dat_test = dat_test))
-accu_rf <- mean(dat_test$emotion_idx == pred_rf)
+if(run.test){
+  load(file="../output/rf_train.RData")
+  tm_test_rf <- system.time(pred_rf <- test_rf(fit_train_rf, dat_test = dat_test))
+}
 ```
 
 Evaluation on RF model
 ```{r}
-accu_svm <- mean(dat_test$emotion_idx == pred_rf)
+accu_rf <- mean(dat_test$emotion_idx == pred_rf)
 cat("The accuracy of model: RF", "is", accu_rf*100, "%.\n")
 confusionMatrix(pred_rf, dat_test$emotion_idx)
 cat("Time for training model RF = ", tm_train_rf[1], "s \n")
@@ -447,16 +505,19 @@ cat("Time for testing model RF = ",tm_test_rf[1], "s \n")
 
 
 #### Step 5.5: Extreme Gradient Boosting (XGBoost)
+
+XGBoost stands for “Extreme Gradient Boosting”, where the term “Gradient Boosting” originates from the paper Greedy Function Approximation: A Gradient Boosting Machine, by Friedman.
+
 Because the constructing XGBoost models take quite a long time, we used random search to tune the parameters. With the result of cross validation on the training set, the hyperparameters we used for XGBoost model are listed as followed.
 
  + booster = "gblinear"  -- the booster to use, can be gbtree or gblinear, gblinear has better performance and efficiency
- + objective = "multi:softmax" -- set xgboost to do multiclass classification using the softmax objective, the prediction outputs the class with maximum probability
+ + objective = "multi:softmax" -- set xgboost to do multiclass classification using the softmax objective, the prediction outputs the probability of each class
  + eval_metric = "mlogloss" -- evaluation metrics for validation data
  + lambda = 1.46  -- L2 regularization term on weights
  + lambda_bias = 0.234  -- L2 regularization term on bias
  + alpha = 0.0198 -- L1 regularization term on weights
  
-```{r}
+```{r train_xgb}
 ### load models built
 source("../lib/train_xgb.R")    ### train model
 
@@ -478,7 +539,7 @@ Please see the details of model as below.
 fit_train_xgb
 ```
 
-After running our baseline model, we wanted to understand the variables that influence the emotion prediction largely. So, we plotted the most influential variables.
+After running our baseline model, we wanted to visualize the contribution of each feature.
 ```{r}
 xgb_importance_mat <- xgb.importance(
   feature_names = colnames(dat_train[,-which(names(dat_train) == 'emotion_idx')]),
@@ -486,11 +547,18 @@ xgb_importance_mat <- xgb.importance(
 xgb.plot.importance (importance_matrix = xgb_importance_mat[1:20]) 
 ```
 
-Then, we predicted the test data and evaluated the performance of model.
-```{r}
+Calculate the training error of XGB model
+```{r train_err_gbx, warning = FALSE, message = FALSE}
 ### load models built
 source("../lib/test_xgb.R")     ### test model
 
+pred_train_xgb <- test_xgb(fit_train_xgb, dat_train)
+accu_train_xgb <- mean(pred_train_xgb$max_prob == dat_train$emotion_idx)
+cat("The trainig accuracy of model: XGB", "is", accu_train_xgb*100, "%.\n")
+```
+
+Then, we predicted the test data and evaluated the performance of model.
+```{r test_xgb}
 ### predict test data
 tm_test_xgb=NA
 if(run.test){
@@ -501,16 +569,47 @@ if(run.test){
 
 Evaluation on XGB model
 ```{r}
+accu_xgb <- mean(pred_xgb$max_prob == dat_test$emotion_idx)
+cat("The accuracy of model: XGB", "is", accu_xgb*100, "%.\n")
 confusionMatrix(factor(pred_xgb$max_prob),factor(dat_test$emotion_idx),mode = "everything")
 cat("Time for training model XGB = ", tm_train_xgb[1], "s \n")
 cat("Time for testing model XGB = ",tm_test_xgb[1], "s \n")
 ```
-Overall, the predictive accuracy of XGBoost is beyond 0.5. Also, the accuracy of test set is close to the accuracy of the cross validation on training set. And with the linear booster, the model performs better and more efficient than tree booster. However, it is computational expensive to tune multiple parameters based on cross validation. The result of model is less interpretable and easily understood as we built models on fiducial points distances. 
 
+Overall, the predictive accuracy of XGBoost is beyond 50%. Also, the accuracy of test set is close to the accuracy of the cross validation on training set. And with the linear booster, the model performs better and more efficient than tree booster. However, it is computational expensive to tune multiple parameters based on cross validation. The result of model is less interpretable and easily understood as we built models on fiducial points distances. 
+
+
+#### Step 5.6: Ensemble Extreme Gradient Boosting (XGBoost) and Support Vector Machine (SVM)
+
+Among these improved models, XGBoost and SVM (With some seed, SVM has the accuracy above 50%) have better performance than others. So we think maybe build a simple ensemble model based on XGBoost result and SVM result, calculating a weighted average of the probability matrix then deciding the final prediction, will increase the accuracy. We conducted the experiments of different weights on the training set to see the performance of the simple ensemble by cross validation.  
+
+```{r ensemble}
+source("../lib/simple_ensemble.R")
+mat1 <- pred_xgb[,-23]
+mat2 <- pred_svm %>% attr("probabilities") %>% as.data.frame() 
+mat2 <- mat2[, order(as.integer(colnames(mat2)))]
+colnames(mat2) = colnames(mat1)
+
+### predict test data
+tm_test_ensemble <- system.time(pred_ensemble <- simple_ensemble(mat1,mat2,0.51))
+```
+
+```{r}
+accu_ensemble <- mean(pred_ensemble$max_prob == dat_test$emotion_idx)
+cat("The accuracy of ensemble model: ", "is", accu_ensemble*100, "%.\n")
+confusionMatrix(factor(pred_ensemble$max_prob),factor(dat_test$emotion_idx))
+cat("Time for training ensemble model = ", tm_train_xgb[1] + tm_train_svm[1], "s \n")
+cat("Time for testing ensemble model = ",tm_test_xgb[1] + tm_test_svm[1] + tm_test_ensemble[1], "s \n")
+```
+
+With the experiments, we found that the weighted average can improve the accuracy by about 1.3% averagely and 2.7% most. Although the accuracy of ensemble model didn't increase that much, the ensemble model balance the error and give us a more stable model. 
+
+#### Step 5.7: Neutral Network (NN)
+We developed NN model by Python, so please see another pdf file in doc folder on Github. Plus, the data used for NN model is dat_train.csv and data_test.csv processed from this R markdown. 
 
 ### Step 6: Comparison and Summary
 
-From above data, we can choose XGB model as our advanced model and there are some advantages of this model: 
+From the data above, we can choose NN model as our advanced model and there are some advantages of this model: 
 
 + High efficiency in both training and testing process; 
 + Higher prediction accuracy compared to baseline model; 

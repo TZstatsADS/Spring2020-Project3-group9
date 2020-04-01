@@ -2,7 +2,7 @@
 ### Classification with testing data ###
 ########################################
 
-test_svm <- function(model, dat_test){
+test_svm <- function(model, dat_test, probability=FALSE){
   
   ### Input: 
   ###  - the fitted classification model using training data
@@ -17,7 +17,7 @@ test_svm <- function(model, dat_test){
   seed <- .Random.seed
   
   ### make predictions
-  pred <- predict(model, dat_test[,-which(names(dat_train) == 'emotion_idx')])
+  pred <- predict(model, dat_test, probability=probability)
   
   return(pred)
 }

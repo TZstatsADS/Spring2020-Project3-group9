@@ -1,0 +1,43 @@
+source("../lib/train_svm.R")
+source("../lib/cross_validation_svm.R")
+
+## SVM Cross-validation
+cost=seq(0.001, 0.01, length=10)
+err_cv_svm <- matrix(0, nrow = length(cost), ncol = 2)
+for(i in 1:length(cost)){
+  cat("cost=", cost[i], "\n")
+  err_cv_svm[i,] <- cv_svm(dat_train, K=5, cost[i])
+  #save(err_cv_svm, file="../output/err_cv_svm.RData")
+}
+save(err_cv_svm, file="../output/err_cv_svm.RData")
+
+#Load visualization of cross validation results of svm
+#load("../output/err_cv_svm.RData")
+err_cv_svm <- as.data.frame(err_cv_svm) 
+colnames(err_cv_svm) <- c("mean_error", "sd_error")
+cost=seq(0.001, 0.01, length=10)
+err_cv_svm$cost = as.factor(cost)
+err_cv_svm %>% 
+  ggplot(aes(x = cost, y = mean_error,
+             ymin = mean_error - sd_error, ymax = mean_error + sd_error)) + 
+  geom_crossbar() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+cost_best <- cost[which.min(err_cv_svm[,1])]
+par_best_svm <- list(cost=cost_best) 
+
+tm_train_svm <- NA
+tm_train_svm <- system.time(fit_train_svm <- train_svm(dat_train, par_best_svm, probability = TRUE))
+save(fit_train_svm, file="../output/svm_train.RData")
+
+### Predicted the test data using SVM model
+source("../lib/test_svm.R")
+tm_test_svm <- NA
+tm_test_svm <- system.time(pred_svm <- test_svm(fit_train_svm, dat_test))
+
+### Evaluation on SVM model
+accu_svm <- mean(dat_test$emotion_idx == pred_svm)
+cat("The accuracy of model: SVM", "is", accu_svm*100, "%.\n")
+confusionMatrix(pred_svm, dat_test$emotion_idx)
+cat("Time for training model SVM = ", tm_train_svm[1], "s \n")
+cat("Time for testing model SVM = ",tm_test_svm[1], "s \n")

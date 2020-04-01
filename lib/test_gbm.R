@@ -21,6 +21,7 @@ test_gbm <- function(model_best, feature_test = dat_test){
   pred <-  predict.gbm(model_best,
                        newdata = feature_test,
                        n.trees = 300)
+  pred <-  apply(pred, 1, which.max)
   return(pred)
   
 }

@@ -2,7 +2,7 @@
 ### Classification with testing data ###
 ########################################
 
-test_lr <- function(model, dat_test){
+test_lr <- function(model, lambda, dat_test){
   
   ### Input: 
   ###  - the fitted classification model using training data

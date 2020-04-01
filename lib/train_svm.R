@@ -1,7 +1,7 @@
 ###########################################################
 ### Train a classification model with training features ###
 ###########################################################
-train_svm <- function(feature_df = pairwise_data, par = NULL){
+train_svm <- function(feature_df = pairwise_data, cost=0.02, probability=FALSE){
   ### Train a classfication model using processed features from training images
   
   ### Input:
@@ -17,8 +17,7 @@ train_svm <- function(feature_df = pairwise_data, par = NULL){
   
   ### Train with SVM
   
-  model <- svm(feature_df[,-which(names(feature_df) == 'emotion_idx')], 
-               feature_df$emotion_idx,type='C',kernel='linear') 
+  model <- svm(emotion_idx~., data = feature_df,type='C',kernel='linear', cost = cost, probability=probability) 
   
   return(model)
 }
