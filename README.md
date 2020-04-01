@@ -18,7 +18,7 @@ Term: Spring 2020
   + Baseline model(GBM) achieved approximately 42% accuracy and need about 30min to train
   + Advanced model(NN) achieved approximately 56.2% accuracy and only need about 35s to train
 	
-**Contribution statement**: ([default](doc/a_note_on_contributions.md)) (In the following context, "all team members" refers to the team meambers listed above.) All team members listed above discussed and decided the models to build in this project.
+**Contribution statement**: ([contribution statement](doc/a_note_on_contributions.md)) (In the following context, "all team members" refers to the team meambers listed above.) All team members listed above discussed and decided the models to build in this project.
   
   For the model training, Qin Zhang designed and trained the baseline model (GBM) in R. Rui Wang conducted PCA on the data and designed and trained the SVM model in R. Mengchen Wang designed and trained LDA and Logistic Regression model in R. Jiadong Wu designed and trained Random Forest model in R and Neural Network model in Pytnon. Huize Huang designed and trained XGboost model in R and designed the ensemble model. The ensemble model is trained by Rui. 
   
