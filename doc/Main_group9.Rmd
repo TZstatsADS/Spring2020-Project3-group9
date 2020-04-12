@@ -171,6 +171,11 @@ if(run.feature.test){
 save(dat_train, file="../output/feature_train.RData")
 save(dat_test, file="../output/feature_test.RData")
 
+# save the data to csv format to use in python
+write.csv(dat_train,"../data/train_set/dat_train.csv")
+write.csv(dat_test,"../data/train_set/dat_test.csv")
+
+
 #load(file="../output/feature_train.RData")
 #load(file="../output/feature_test.RData")
 ```
